@@ -1,0 +1,28 @@
+# Template for build/bsort_n<N>.sby, written by make sby-sorted N=<n>.
+# One task per assertion, so each gets its own result and time.
+[tasks]
+sorted
+permutation
+
+[options]
+mode prove
+depth 1
+timeout @TIMEOUT@
+
+[engines]
+smtbmc boolector
+
+[script]
+# Verific parses the RTL and the SVA. No synthesis step.
+read -verific
+read -formal bsort.sv bsort_formal.sv
+hierarchy -top bsort_formal -chparam N @N@
+sorted: delete bsort_formal/assert_permutation
+permutation: delete bsort_formal/assert_sorted
+# Catch a lost property or a stray assumption before accepting a result.
+select -assert-count 1 t:$assert
+select -assert-none t:$assume
+
+[files]
+bsort.sv
+bsort_formal.sv
