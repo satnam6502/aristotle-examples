@@ -1,0 +1,12 @@
+[options]
+
+[gold]
+read -sv bsort.sv
+prep -top bsort
+
+[gate]
+read -sv bsort_verific_rtl_tv.sv
+prep -top bsort
+
+[strategy simple]
+use sat
