@@ -1,15 +1,17 @@
 # 8-bit Gray-code counter in Lean
 
 `GrayCode.lean` models a small synchronous circuit, an 8-bit Gray-code
-counter, in plain Lean 4 with no Mathlib. It simulates the first 10 cycles
-and checks the outputs.
+counter, in plain Lean 4 with no Mathlib. It simulates the first 10 cycles,
+checks the outputs, and proves the counter correct for every cycle.
 
 ## Files
 
 | File | What it is |
 |---|---|
-| `GrayCode.lean` | The circuit model, the counter, a simulation and its checks |
+| `GrayCode.lean` | The circuit model, the counter, a simulation, its checks and proofs |
 | `lean-toolchain` | Pins Lean `v4.34.1` |
+| `README.md` | This file |
+| `../.github/workflows/gray-code-lean.yml` | CI: compiles `GrayCode.lean` when a pull request or a push to main changes this directory |
 
 ## The model
 
@@ -20,12 +22,13 @@ abbrev Wire := Nat → BitVec 8
 ```
 
 - **Gates.** `gate1` and `gate2` turn functions on `BitVec 8` into gates on
-  wires. `xorGate`, `addGate` and `shr1` are built from them.
+  wires. `xorGate` and `shr1` are built from them.
 - **Register.** `reg init d` outputs `init` in cycle 0, then whatever `d`
   carried one cycle earlier.
 - **Feedback.** Lean has no general fixpoint on wires. So `loopReg init f`
   builds a register whose input is its own output passed through `f`, one
-  cycle at a time.
+  cycle at a time. `f` has type `BitVec 8 → BitVec 8`, not `Wire → Wire`,
+  so the loop body can only be combinational logic.
 
 ## The circuit
 
@@ -38,8 +41,10 @@ The counter is a binary counter followed by a binary-to-Gray encoder:
    +----------------------------+
 ```
 
-- `counter` is a register fed back through an incrementer.
-- `bin2gray b` is `b ^^^ (b >>> 1)`.
+- `counter` is `loopReg 0 inc`, a register fed back through the incrementer
+  `inc b = b + 1`.
+- `bin2gray` is built from an XOR gate and a shift-right gate. Each cycle it
+  computes `gray b = b ^^^ (b >>> 1)`.
 - `grayCounter` is `bin2gray counter`.
 
 ## Running
@@ -52,7 +57,8 @@ Run it from this directory so elan picks up `lean-toolchain`. Without the
 pin, elan's default `stable` makes it look for a new toolchain over the
 network, and `lean` can hang.
 
-The output is the first 10 Gray codes, then a trace of each cycle:
+It takes a few seconds. The output is the first 10 Gray codes, then a trace
+of each cycle:
 
 ```
 [0, 1, 3, 2, 6, 7, 5, 4, 12, 13]
@@ -68,16 +74,26 @@ cycle 8:  count 00001000  gray 00001100
 cycle 9:  count 00001001  gray 00001101
 ```
 
+Each value on a wire is recomputed from cycle 0, so simulating n cycles takes
+O(n²) steps. That is fine for short traces.
+
 ## Checks
 
-The file fails to compile if any of these fails.
+The file fails to compile if any of these fails. The theorems use only Lean's
+standard axioms, `propext` and `Quot.sound`.
 
 - **Expected codes.** A `#guard` compares the first 10 outputs with a list
   written out by hand. The theorem `first10` proves the same equation with
   `decide`, so the kernel checks it.
-- **One bit per step.** A second `#guard` checks that each of the 9 steps
-  flips exactly one bit.
-- **Feedback.** The theorem `loopReg_spec` proves that `loopReg` agrees with
-  `reg` with its output fed back. It covers only feedback through a `gate1`
-  gate. The counter's incrementer is written with `addGate`, which computes
-  the same function.
+- **Wraparound.** A `#guard` checks that cycle 255 outputs `10000000` and
+  cycle 256 outputs `00000000`.
+- **Feedback.** `loopReg_spec` proves that `loopReg init f` equals
+  `reg init (gate1 f (loopReg init f))`, for every `init` and `f`.
+- **Counter.** `counter_eq` proves that cycle `t` of `counter` holds `t`
+  modulo 256. `grayCounter_eq` proves that cycle `t` of `grayCounter` holds
+  `gray` of that value.
+- **One bit per step.** `gray_oneBitApart` proves by `decide`, over all 256
+  values of `b`, that `gray b` and `gray (b + 1)` differ in exactly one bit.
+  The case `b = 255` is the wrap to 0. `grayCounter_oneBitApart` follows: in
+  every cycle, the next output differs from the current one in exactly one
+  bit.

@@ -1,0 +1,35 @@
+name: Gray-code Lean check
+
+on:
+  pull_request:
+    paths:
+      - "gray_code_lean/**"
+      - ".github/workflows/gray-code-lean.yml"
+  push:
+    branches: [main]
+    paths:
+      - "gray_code_lean/**"
+      - ".github/workflows/gray-code-lean.yml"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      # elan-init.sh from elan v4.2.4. The toolchain itself comes from
+      # gray_code_lean/lean-toolchain.
+      - name: Install elan
+        run: |
+          curl -sSfL -o elan-init.sh \
+            https://raw.githubusercontent.com/leanprover/elan/227caca133724d5516bee25c2aeb3e609478f2d8/elan-init.sh
+          sh elan-init.sh -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      # Fails if any #guard or theorem fails.
+      - name: Compile GrayCode.lean
+        working-directory: gray_code_lean
+        run: lean GrayCode.lean
