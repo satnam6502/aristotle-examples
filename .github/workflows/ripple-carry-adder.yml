@@ -49,10 +49,11 @@ jobs:
       - name: Install Verilator
         run: sudo apt-get update && sudo apt-get install -y verilator
 
+      # --timing because the testbench has delays. Older Verilators insist.
       - name: Lint
         run: |
           verilator --version
-          verilator --lint-only -Wall -Wno-DECLFILENAME --top-module ripple_carry_adder_tb \
+          verilator --lint-only -Wall -Wno-DECLFILENAME --timing --top-module ripple_carry_adder_tb \
             ripple_carry_adder.sv ripple_carry_adder_sva.sv ripple_carry_adder_tb.sv
 
       # --assert turns on the bound SVA assertion.
@@ -84,6 +85,20 @@ jobs:
       # EBMC exits with 0 if every property is proved and 10 if one is refuted.
       - name: Prove assert_sum
         run: ebmc ripple_carry_adder.sv ripple_carry_adder_sva.sv --top ripple_carry_adder
+
+      # EBMC can't set a parameter, so each width gets a top module that
+      # instantiates the adder. The bind follows the instance.
+      - name: Prove assert_sum, N = 1, 2, 16, 32, 64 and 128
+        run: |
+          for n in 1 2 16 32 64 128; do
+            cat > "$RUNNER_TEMP/top$n.sv" <<EOF
+          module top$n (input wire [$((n-1)):0] a, input wire [$((n-1)):0] b, input wire cin,
+                        output wire [$((n-1)):0] sum, output wire cout);
+            ripple_carry_adder #(.N($n)) dut (.a(a), .b(b), .cin(cin), .sum(sum), .cout(cout));
+          endmodule
+          EOF
+            ebmc ripple_carry_adder.sv ripple_carry_adder_sva.sv "$RUNNER_TEMP/top$n.sv" --top top$n
+          done
 
   lean:
     runs-on: ubuntu-latest

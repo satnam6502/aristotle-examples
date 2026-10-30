@@ -65,8 +65,14 @@ module ripple_carry_adder_tb;
           for (int c = 0; c < 2; c++)
             check(N'(i), N'(j), 1'(c));
     end else begin
-      corners = '{'0, N'(1), '1, '1 >> 1, ~('1 >> 1),
-                  alternating(), ~alternating()};
+      // One element at a time: Icarus 12 can't assign a whole array.
+      corners[0] = '0;
+      corners[1] = N'(1);
+      corners[2] = '1;
+      corners[3] = '1 >> 1;
+      corners[4] = ~('1 >> 1);
+      corners[5] = alternating();
+      corners[6] = ~alternating();
       foreach (corners[i])
         foreach (corners[j])
           for (int c = 0; c < 2; c++)

@@ -242,7 +242,8 @@ assertion bound in, Verilator `--assert` passes the testbench at N = 1, 8,
 10, 64 and 100, and slang and Verilator `-Wall` report no warnings.
 
 CI runs the Icarus testbench and the Verilator testbench with the SVA
-assertion, at N = 8 and 64, the EBMC proof at N = 8, and the Lean file.
+assertion, at N = 8 and 64. It runs the EBMC proof at N = 1, 2, 8, 16, 32,
+64 and 128, and compiles the Lean file.
 
 Three broken copies of the design check that the testbench and the SVA
 assertion find bugs. Each one fails the testbench at N = 8 and N = 64. EBMC
