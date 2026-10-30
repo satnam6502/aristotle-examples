@@ -41,6 +41,8 @@ def fullAdder (a b cin : Bool) : FullAdderOut :=
 
 /-! ## `ripple_carry_adder` -/
 
+variable {n : Nat}
+
 /-- An N-bit bus, like `wire [N-1:0]`: bit `i` is `bus i`. -/
 abbrev Bus (n : Nat) := Fin n → Bool
 

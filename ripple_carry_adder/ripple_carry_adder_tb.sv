@@ -6,7 +6,7 @@
 
 module ripple_carry_adder_tb;
   parameter int N = 8;
-  parameter int EXHAUSTIVE_MAX_N = 10;
+  parameter int EXHAUSTIVE_MAX_N = 10;  // At most 30: the loops count in int
   parameter int RANDOM_TESTS = 100000;
 
   logic [N-1:0] a, b;
@@ -57,6 +57,8 @@ module ripple_carry_adder_tb;
   logic [N-1:0] corners[7];
 
   initial begin
+    if (EXHAUSTIVE_MAX_N > 30)
+      $fatal(1, "EXHAUSTIVE_MAX_N is %0d, but must be at most 30", EXHAUSTIVE_MAX_N);
     if (N <= EXHAUSTIVE_MAX_N) begin
       for (int i = 0; i < (1 << N); i++)
         for (int j = 0; j < (1 << N); j++)

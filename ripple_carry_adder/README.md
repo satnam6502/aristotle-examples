@@ -20,6 +20,7 @@ correct for every width.
 | `ripple_carry_adder_sva.sv` | An SVA assertion that the output is the sum of the inputs, bound to `ripple_carry_adder` |
 | `ripple_carry_adder.lean` | The same design as Boolean functions, a proof that it adds, and checks like the testbench's |
 | `lean-toolchain` | Pins Lean `v4.34.1` for `ripple_carry_adder.lean` |
+| `../.github/workflows/ripple-carry-adder.yml` | CI: Icarus, Verilator with the SVA assertion, EBMC and Lean, when this directory changes |
 | `README.md` | This file |
 
 ## The design
@@ -73,7 +74,7 @@ always has the adder's width.
 
 ```systemverilog
 always_comb begin
-  assert_sum: assert ({cout, sum} == (N+1)'(a) + (N+1)'(b) + (N+1)'(cin));
+  assert_sum: assert final ({cout, sum} == (N+1)'(a) + (N+1)'(b) + (N+1)'(cin));
 end
 ```
 
@@ -84,8 +85,19 @@ With `cin` = 0, that is the sum of the two inputs.
   assertion needs a clock, and the adder has none. EBMC proves an unclocked
   `assert property`, but slang rejects it ("sequence has no explicit
   clocking event") and Verilator won't run it ("Unsupported: Unclocked
-  assertion"). The immediate assertion works in all three. It is also alone
-  in its `always_comb` block, the only assertion form Aristotle reads.
+  assertion").
+- **Deferred, with `assert final`.** A simulator checks a deferred
+  assertion at the end of the time step, after the gates settle. A plain
+  immediate `assert` runs as soon as an input changes, before `sum` and
+  `cout` update. In Icarus, with the checker instantiated directly, a plain
+  `assert` failed about 369,000 times on the correct adder during the
+  131,072 tests at N = 8. Verilator evaluates the whole gate network at
+  once, so it never showed those failures.
+- **Tool support.** slang, Verilator and EBMC accept `assert final`. Icarus
+  supports neither `bind` nor deferred assertions, so it runs the testbench
+  without this file. The bsort example found that Aristotle reads an
+  immediate assertion alone in its `always_comb` block. Whether it reads
+  `assert final` has not been tested.
 - **Named connections.** The bind connects the ports by name. EBMC 6.1
   rejects `.*` ("no support for wildcard port connection").
 
@@ -204,8 +216,8 @@ verilator --lint-only -Wall -Wno-DECLFILENAME --top-module ripple_carry_adder_tb
 a file named after `ripple_carry_adder`.
 
 To check the SVA assertion during simulation, add `ripple_carry_adder_sva.sv`
-to the Verilator command, and add `--assert`. Icarus Verilog doesn't support
-`bind`, so leave the file out for Icarus.
+to the Verilator command, and add `--assert`. Icarus Verilog supports
+neither `bind` nor deferred assertions, so leave the file out for Icarus.
 
 Lean, from this directory so elan picks up `lean-toolchain`:
 
@@ -225,10 +237,12 @@ warnings.
 
 EBMC 6.1 proves the SVA assertion at N = 8, and at N = 1, 2, 16, 32, 64 and
 128 through top modules like the one described above. Each proof takes about
-a second. These runs used the WebAssembly build from the EBMC 6.1 release,
-under Node.js. With the assertion bound in, Verilator `--assert` passes the
-testbench at N = 1, 8, 10, 64 and 100, and slang and Verilator `-Wall`
-report no warnings.
+a second. These runs used EBMC 6.1 built from source on macOS. With the
+assertion bound in, Verilator `--assert` passes the testbench at N = 1, 8,
+10, 64 and 100, and slang and Verilator `-Wall` report no warnings.
+
+CI runs the Icarus testbench and the Verilator testbench with the SVA
+assertion, at N = 8 and 64, the EBMC proof at N = 8, and the Lean file.
 
 Three broken copies of the design check that the testbench and the SVA
 assertion find bugs. Each one fails the testbench at N = 8 and N = 64. EBMC
@@ -240,8 +254,8 @@ refutes the assertion for each one and gives a counterexample:
 | `half_adder`: `xor` for the sum becomes `or` | 121,230 of 131,072 | 192 + 183 + 0 gives `sum` 247, `cout` 1 |
 | `ripple_carry_adder`: `cout` comes from `carry[N-1]`, not `carry[N]` | 32,768 of 131,072 | 64 + 64 + 0 gives `sum` 128, `cout` 1 |
 
-With the first change, Verilator `--assert` also stops on the SVA assertion
-at the first failing test.
+With each change, Verilator `--assert` also stops on the SVA assertion at
+the first failing test.
 
 `lean ripple_carry_adder.lean` passes with Lean v4.34.1, proof included.
 Making the same three changes to the Lean model breaks the proof and all

@@ -1,0 +1,107 @@
+name: Ripple-carry adder checks
+
+on:
+  pull_request:
+    paths:
+      - "ripple_carry_adder/**"
+      - ".github/workflows/ripple-carry-adder.yml"
+  push:
+    branches: [main]
+    paths:
+      - "ripple_carry_adder/**"
+      - ".github/workflows/ripple-carry-adder.yml"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+    working-directory: ripple_carry_adder
+
+jobs:
+  icarus:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Install Icarus Verilog
+        run: sudo apt-get update && sudo apt-get install -y iverilog
+
+      # Icarus supports neither bind nor deferred assertions, so it runs the
+      # testbench without ripple_carry_adder_sva.sv.
+      - name: Testbench, N = 8 and 64
+        run: |
+          for n in 8 64; do
+            iverilog -g2012 -Pripple_carry_adder_tb.N=$n -o tb$n.vvp \
+              ripple_carry_adder.sv ripple_carry_adder_tb.sv
+            vvp -n tb$n.vvp | tee tb$n.log
+            grep -q '^PASS' tb$n.log
+          done
+
+  verilator:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Install Verilator
+        run: sudo apt-get update && sudo apt-get install -y verilator
+
+      - name: Lint
+        run: |
+          verilator --version
+          verilator --lint-only -Wall -Wno-DECLFILENAME --top-module ripple_carry_adder_tb \
+            ripple_carry_adder.sv ripple_carry_adder_sva.sv ripple_carry_adder_tb.sv
+
+      # --assert turns on the bound SVA assertion.
+      - name: Testbench with the SVA assertion, N = 8 and 64
+        run: |
+          for n in 8 64; do
+            verilator --binary --assert -GN=$n --Mdir obj$n --top-module ripple_carry_adder_tb \
+              ripple_carry_adder.sv ripple_carry_adder_sva.sv ripple_carry_adder_tb.sv
+            obj$n/Vripple_carry_adder_tb | tee sim$n.log
+            grep -q '^PASS' sim$n.log
+          done
+
+  ebmc:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      # The EBMC 6.1 release package, checked against its SHA-256.
+      - name: Install EBMC 6.1
+        working-directory: ${{ runner.temp }}
+        run: |
+          curl -sSfL -o ebmc_6.1_amd64.deb \
+            https://github.com/diffblue/hw-cbmc/releases/download/ebmc-6.1/ebmc_6.1_amd64.deb
+          echo "aa0d3e6ab04efcd85c270fd3f192bbcbc18fdc03bda2f21832a481c28a32da0c  ebmc_6.1_amd64.deb" \
+            | sha256sum -c -
+          sudo apt-get update && sudo apt-get install -y ./ebmc_6.1_amd64.deb
+
+      # EBMC exits with 0 if every property is proved and 10 if one is refuted.
+      - name: Prove assert_sum
+        run: ebmc ripple_carry_adder.sv ripple_carry_adder_sva.sv --top ripple_carry_adder
+
+  lean:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      # elan-init.sh from elan v4.2.4, checked against its SHA-256. The
+      # toolchain itself comes from ripple_carry_adder/lean-toolchain.
+      - name: Install elan
+        working-directory: ${{ runner.temp }}
+        run: |
+          curl -sSfL -o elan-init.sh \
+            https://raw.githubusercontent.com/leanprover/elan/227caca133724d5516bee25c2aeb3e609478f2d8/elan-init.sh
+          echo "a620ff1641616222c8d37c54845492004bb84d6877cdbc944dd65c1aa685bf53  elan-init.sh" | sha256sum -c -
+          sh elan-init.sh -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      # Fails if the proof or any #guard fails.
+      - name: Compile ripple_carry_adder.lean
+        run: lean ripple_carry_adder.lean

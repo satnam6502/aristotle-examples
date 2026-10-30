@@ -2,6 +2,11 @@
 // adder has no clock, so the check is an immediate assertion in always_comb,
 // not a concurrent property, which would need a clock. It must hold for every
 // value of a, b and cin.
+//
+// The assertion is deferred (assert final): a simulator checks it at the end
+// of the time step, after the gates settle. A plain immediate assertion runs
+// as soon as an input changes, before sum and cout update, so an
+// event-driven simulator reports false failures.
 
 module ripple_carry_adder_sva #(parameter int N = 8)
                               (input wire [N-1:0] a,
@@ -11,7 +16,7 @@ module ripple_carry_adder_sva #(parameter int N = 8)
                                input wire         cout);
   // The output {cout, sum} is the (N+1)-bit sum of the inputs a, b and cin.
   always_comb begin
-    assert_sum: assert ({cout, sum} == (N+1)'(a) + (N+1)'(b) + (N+1)'(cin));
+    assert_sum: assert final ({cout, sum} == (N+1)'(a) + (N+1)'(b) + (N+1)'(cin));
   end
 endmodule: ripple_carry_adder_sva
 
